@@ -17,7 +17,7 @@ paths = [
   { dst = ".", src = "./data/metadata/Keygenme_ppc.setup.ron" },
   { dst = ".", src = "./data/metadata/Keygenme_xtensa.setup.ron" },
 
-  { dst = ".", src = "../icicle/afl-icicle-trace/target/release/afl-icicle-trace" },
+  { dst = ".", src = "../icicle-emu/target/release/afl-icicle-trace" },
 
   { dst = "ghidra/Ghidra/Processors/xtensa/data", src = "../ghidra/Ghidra/Processors/xtensa/data/languages" },
   { dst = "ghidra/Ghidra/Processors/PowerPC/data", src = "../ghidra/Ghidra/Processors/PowerPC/data/languages" },

@@ -2,11 +2,9 @@
 
 ## Usage
 
-First compile the `bench-harness` and `agent` binaries:
+(NOTE: a KVM enabled host is required to run the benchmarks).
 
-```
-cargo build --release
-```
+First follow the instructions in [README.md](../README.md).
 
 Next build the disk images needed to run the benchmarks. (Currently this requires root to allow the disk images to be temporarily mounted during creation).
 
@@ -22,10 +20,12 @@ The tool can then be used to run a new benchmark:
 
 ## Benchmarks for Icicle paper
 
+(Note: be sure to set `workers` to an appropraite value)
+
 * Instrumentation test benchmark:
 
 ```
-./target/release/bench-harness --workers=50 bench --id=001 --trials=5 "$(cat data/config/instrumentation-tasks)"
+./target/release/bench-harness --workers=50 bench --id=001 --trials=20 "$(cat data/config/instrumentation-test-tasks)"
 ```
 
 * `LAVA-M` bug finding benchmarks:

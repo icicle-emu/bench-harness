@@ -8,3 +8,4 @@ data/ghidra-rootfs/xtensa
 **/tmp
 .harness-cache
 .bench-harness-download
+output

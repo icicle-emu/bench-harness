@@ -105,10 +105,6 @@ parameters = ["MCU=msp430f5529", "BINARY_NAME=H4_PacketProtocol.out"]
 template = "msp430"
 parameters = ["MCU=msp430f2132", "BINARY_NAME=heart_rate_dump.hex"]
 
-[templated_tasks.'smartlock']
-template = "msp430"
-parameters = ["MCU=msp430g2433", "MSP430_LOAD_ADDR=0xe000", "BINARY_NAME=Smart_lock_dump_code.bin"]
-
 [templated_tasks.'goodwatch']
 template = "msp430"
 parameters = ["MCU=goodwatch_cc430f6137", "BINARY_NAME=goodwatch.elf"]
@@ -121,10 +117,6 @@ parameters = ["MODE=cov", "MCU=msp430f5529", "BINARY_NAME=H4_PacketProtocol.out"
 [templated_tasks.'heart_rate_cov_only']
 template = "msp430"
 parameters = ["MODE=cov", "MCU=msp430f2132", "BINARY_NAME=heart_rate_dump.hex"]
-
-[templated_tasks.'smartlock_cov_only']
-template = "msp430"
-parameters = ["MODE=cov", "MCU=msp430g2433", "MSP430_LOAD_ADDR=0xe000", "BINARY_NAME=Smart_lock_dump_code.bin"]
 
 [templated_tasks.'goodwatch_cov_only']
 template = "msp430"
