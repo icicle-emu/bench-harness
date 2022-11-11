@@ -1,0 +1,131 @@
+[instances.msp-fuzz]
+boot_delay_sec = 2
+machine = { smt = false, mem_size_mib = 4096, vcpu_count = 1 }
+rootfs = { name = "rootfs", image = "rootfs", mount_as = "read_only" }
+drives = [
+    { name = "fuzzer", image = "lava-fuzz", mount_as = "read_only" },
+    { name = "var", image = "empty-256MB", mount_as = "duplicate" },
+]
+
+
+[templates.msp430]
+defaults = [
+    "DURATION='24h'",
+    "EXEC_TIMEOUT=1000+",
+    "INPUT_DIR=fuzzer/inputs/generic",
+    "FUZZER=icicle",
+    "ARCH=msp430",
+    "MODE=cov+cmplog",
+]
+template = """
+{%
+    with (WORKDIR, OUTPUT_PATH, AFL_FUZZ_FLAGS, MCU_PATH) = (
+        "var/workdir_{TRIAL}",
+        ("./output/msp430/{BENCH_ID}/{TASK_NAME}/{TRIAL}"),
+        ("-c0 -l2" if MODE == "cov+cmplog"),
+        ("fuzzer/msp430-mcu/" ~ MCU ~ ".ron")
+    )
+%}
+instance = "msp-fuzz"
+vars = [
+    "TAG=v1;bench={BENCH_ID};fuzzer={{FUZZER}};mode={{MODE}};binary={{BINARY_NAME}};arch={{ARCH}};trial={TRIAL}",
+
+    "AFL_FORKSRV_INIT_TMOUT=1000000",
+    "AFL_NO_UI=1",
+    "AFL_DEBUG=1",
+    "AFL_QEMU_CUSTOM_BIN=1",
+
+    "ICICLE_ENABLE_JIT_VERIFIER=false",
+    "ICICLE_BLOCK_COVERAGE_ONLY=1",
+    "ICICLE_ARCH={{ARCH}}-none",
+
+    "MSP430_MCU={{MCU_PATH}}",
+    "MSP430_FIXED_SEED=0x670d7c8767aa7116",     # The seed used for interrupt scheduling
+
+{% if MSP430_LOAD_ADDR %}
+    "MSP430_LOAD_ADDR={{MSP430_LOAD_ADDR}}",
+{% endif %}
+]
+
+[[tasks]]
+kind = "run"
+command = "mkdir -p {{WORKDIR}}"
+
+
+[[tasks]]
+kind = "run"
+duration = {{DURATION}}
+command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i {INPUT_DIR} -o {{WORKDIR}} fuzzer/afl-icicle-trace fuzzer/sysroots/msp430/{{BINARY_NAME}}"
+# stdout = "{{WORKDIR}}/fuzzer.stdout"
+# stderr = "{{WORKDIR}}/fuzzer.stderr"
+
+[[tasks]]
+kind = "copy_file"
+src = "{{WORKDIR}}/default/plot_data"
+dst = "{{OUTPUT_PATH}}/plot_data"
+
+# [[tasks]]
+# kind = "copy_file"
+# src = "{{WORKDIR}}/fuzzer.stdout"
+# dst = "{{OUTPUT_PATH}}/fuzzer.stdout"
+
+# [[tasks]]
+# kind = "copy_file"
+# src = "{{WORKDIR}}/fuzzer.stderr"
+# dst = "{{OUTPUT_PATH}}/fuzzer.stderr"
+
+[[tasks]]
+kind = "copy_dir"
+src = "{{WORKDIR}}/default/queue"
+dst = "{{OUTPUT_PATH}}/queue"
+
+[[tasks]]
+kind = "copy_dir"
+src = "{{WORKDIR}}/default/crashes"
+dst = "{{OUTPUT_PATH}}/crashes"
+
+[[tasks]]
+kind = "result_collector"
+command = "ICICLE_RESOLVE_CRASHES='{{WORKDIR}}/default/crashes' fuzzer/afl-icicle-trace fuzzer/sysroots/msp430/{{BINARY_NAME}}"
+dst = "{{OUTPUT_PATH}}_crashes.json"
+
+[[tasks]]
+kind = "result_collector"
+command = "ICICLE_BLOCK_COVERAGE='{{WORKDIR}}/default/queue' fuzzer/afl-icicle-trace fuzzer/sysroots/msp430/{{BINARY_NAME}}"
+dst = "{{OUTPUT_PATH}}_coverage.json"
+
+{% endwith %}
+"""
+
+[templated_tasks.'H4_PacketProtocol']
+template = "msp430"
+parameters = ["MCU=msp430f5529", "BINARY_NAME=H4_PacketProtocol.out"]
+
+[templated_tasks.'heart_rate']
+template = "msp430"
+parameters = ["MCU=msp430f2132", "BINARY_NAME=heart_rate_dump.hex"]
+
+[templated_tasks.'smartlock']
+template = "msp430"
+parameters = ["MCU=msp430g2433", "MSP430_LOAD_ADDR=0xe000", "BINARY_NAME=Smart_lock_dump_code.bin"]
+
+[templated_tasks.'goodwatch']
+template = "msp430"
+parameters = ["MCU=goodwatch_cc430f6137", "BINARY_NAME=goodwatch.elf"]
+
+
+[templated_tasks.'H4_PacketProtocol_cov_only']
+template = "msp430"
+parameters = ["MODE=cov", "MCU=msp430f5529", "BINARY_NAME=H4_PacketProtocol.out"]
+
+[templated_tasks.'heart_rate_cov_only']
+template = "msp430"
+parameters = ["MODE=cov", "MCU=msp430f2132", "BINARY_NAME=heart_rate_dump.hex"]
+
+[templated_tasks.'smartlock_cov_only']
+template = "msp430"
+parameters = ["MODE=cov", "MCU=msp430g2433", "MSP430_LOAD_ADDR=0xe000", "BINARY_NAME=Smart_lock_dump_code.bin"]
+
+[templated_tasks.'goodwatch_cov_only']
+template = "msp430"
+parameters = ["MODE=cov", "MCU=goodwatch_cc430f6137", "BINARY_NAME=goodwatch.elf"]

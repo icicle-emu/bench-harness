@@ -1,0 +1,5 @@
+# <file system>     <mount point>   <type>  <options>       <dump>  <pass>
+/dev/vdb            /fuzzer         ext4    defaults        0       0
+/dev/vdc            /var            ext4    defaults        0       0
+/var/root           /root           none    bind            0       0
+tmpfs               /tmp            tmpfs   nosuid,nodev,noatime 0 0

@@ -1,0 +1,10 @@
+/build
+**/target
+/firecracker
+firecracker-v0.24.3-x86_64.tgz
+data/fuzzing-rootfs/agent
+data/ghidra-rootfs/agent
+data/ghidra-rootfs/xtensa
+**/tmp
+.harness-cache
+.bench-harness-download

@@ -1,0 +1,64 @@
+vars = [
+    "INPUT_DIR=fuzzer/inputs",
+    "ICICLE_SYSROOT=fuzzer/sysroots/{arch}",
+    "GHIDRA_SRC=fuzzer/ghidra",
+    "ICICLE_LOG=error",
+    "RUST_BACKTRACE=1",
+]
+include = [
+    "./data/config/msp430.toml",
+    "./data/config/instrumentation-test.toml",
+    "./data/config/afl_ghidra_bridge.toml",
+]
+include_template = [
+    "./data/config/lava.toml.jinja",
+]
+
+[firecracker]
+url = "https://github.com/firecracker-microvm/firecracker/releases/download/v1.0.0/firecracker-v1.0.0-x86_64.tgz"
+sha256 = "b2212d30370550bc613e52c38bc8522e56e3571a5e9607b741408edbe5632604"
+
+[kernel]
+url = "https://github.com/icicle-emu/binaries/releases/download/4.20/vmlinux"
+sha256 = "266f527579751cb87f14d69b6c4b09a151557eaa1f509f50ae994f6ade8b17af"
+boot_args = """
+console=ttyS0 reboot=k panic=1 loglevel=3 \
+fsck.mode=skip random.trust_cpu=on \
+i8042.noaux i8042.nomux i8042.nopnp \
+align_va_addr=64 mitigations=off """
+entropy = [
+    0x325f469a, 0x3c20b2d7, 0x7dad2568, 0x00aca3d3,
+    0x3daa8f93, 0x1ac74e28, 0x46566718, 0x9e2b99b3,
+    0x6cf9d44d, 0xad5fc671, 0x400fea73, 0x34d50c34,
+    0x96d7df1b, 0x706f937f, 0x952660f9, 0x1fe41df9,
+]
+
+[local_worker]
+agent_path = "./target/release/agent"
+workdir = "./local_worker"
+
+[images.rootfs]
+kind = "docker"
+tag = "worker-rootfs"
+build_path = "./data/fuzzing-rootfs"
+copy = ["bin", "etc", "lib", "lib64", "root", "sbin", "usr"]
+create_dirs = ["boot", "dev", "proc", "run", "sys", "var", "fuzzer", "tmp"]
+size = 409_600_000
+
+[images.ghidra-rootfs]
+kind = "docker"
+tag = "ghidra-rootfs"
+build_path = "./data/ghidra-rootfs"
+copy = ["bin", "etc", "lib", "lib64", "root", "sbin", "usr", "ghidra"]
+create_dirs = ["boot", "dev", "proc", "run", "sys", "var", "fuzzer", "tmp"]
+size = 1_800_000_000
+
+[images.empty]
+kind = "host"
+paths = []
+size = 100_000_000
+
+[images.'empty-256MB']
+kind = "host"
+paths = []
+size = 256_000_000

@@ -1,0 +1,145 @@
+[images.lava-fuzz]
+kind = "host"
+paths = [
+    { dst = "inputs/generic", src = "../inputs/generic" },
+
+    { dst = "sysroots", src = "../sysroots/." },
+
+    { dst = ".", src = "../AFLplusplus/afl-fuzz" },
+    { dst = ".", src = "../AFLplusplus/afl-qemu-trace-x86_64" },
+    { dst = ".", src = "../AFLplusplus/afl-qemu-trace-aarch64" },
+    { dst = ".", src = "../AFLplusplus/afl-qemu-trace-mipsel" },
+    { dst = ".", src = "../AFLplusplus/afl-qemu-trace-riscv64" },
+
+    { dst = ".", src = "../icicle/afl-icicle-trace/target/release/afl-icicle-trace" },
+
+    { dst = "ghidra/Ghidra/Processors/AARCH64/data", src = "../ghidra/Ghidra/Processors/AARCH64/data/languages" },
+    { dst = "ghidra/Ghidra/Processors/MIPS/data", src = "../ghidra/Ghidra/Processors/MIPS/data/languages" },
+    { dst = "ghidra/Ghidra/Processors/RISCV/data", src = "../ghidra/Ghidra/Processors/RISCV/data/languages" },
+    { dst = "ghidra/Ghidra/Processors/x86/data", src = "../ghidra/Ghidra/Processors/x86/data/languages" },
+
+    { dst = ".", src = "../memofuzz/msp430-mcu" },
+    { dst = "ghidra/Ghidra/Processors/TI_MSP430/data", src = "../ghidra/Ghidra/Processors/TI_MSP430/data/languages" },
+]
+
+[instances.lava-fuzz]
+boot_delay_sec = 2
+machine = { smt = false, mem_size_mib = 2048, vcpu_count = 1 }
+rootfs = { name = "rootfs", image = "rootfs", mount_as = "read_only" }
+drives = [
+    { name = "fuzzer", image = "lava-fuzz", mount_as = "read_only" },
+    { name = "var", image = "empty", mount_as = "duplicate" },
+]
+
+{% macro lava_task(FUZZER, BINARY, ARGS, MODE, ARCH="x86_64", DURATION="'12h'", EXEC_TIMEOUT="1000+") %}
+{%
+    with (TASK_NAME, WORKDIR, TRIAL_DIR, AFL_FUZZ_FLAGS, QEMU_LD_PREFIX) = (
+        (FUZZER ~ "-lava-" ~ MODE ~ "/" ~ ARCH ~ "/" ~ BINARY),
+        "var/workdir_{TRIAL}",
+        "./output/lava/{BENCH_ID}/{TASK_NAME}/{TRIAL}",
+        ("-c0 -l2" if MODE == "cov+cmplog"),
+        ("fuzzer/sysroots/" ~ ARCH)
+    )
+%}
+[tasks.'{{TASK_NAME}}']
+instance = "lava-fuzz"
+vars = [
+    "TAG=v1;bench={BENCH_ID};fuzzer={{FUZZER}};mode={{MODE}};binary={{BINARY}};arch={{ARCH}};trial={TRIAL}",
+
+    "AFL_FORKSRV_INIT_TMOUT=1000000",
+    "AFL_NO_UI=1",
+    "AFL_QEMU_CUSTOM_BIN=1",
+    "LC_ALL=C",
+
+{% if MODE == "cov+compcov" %}
+    "AFL_COMPCOV_LEVEL=2",
+{% endif %}
+
+{% if FUZZER == "icicle" %}
+    "ICICLE_ENABLE_JIT_VERIFIER=false",
+    "ICICLE_DRY_RUN=1",
+    "ICICLE_NO_CMPLOG_RTN=1",
+    "ICICLE_ARCH={{ARCH}}-linux",
+{% endif %}
+]
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "run"
+command = "mkdir -p {{WORKDIR}}"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "run"
+duration = {{DURATION}}
+stdout = "{{WORKDIR}}/fuzzer.stdout"
+stderr = "{{WORKDIR}}/fuzzer.stderr"
+{% if FUZZER == "qemu" %}
+command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i fuzzer/inputs/generic -o {{WORKDIR}} fuzzer/afl-qemu-trace-{{ARCH}} -L {{QEMU_LD_PREFIX}} {{QEMU_LD_PREFIX}}/bin/lava/{{BINARY}} {{ARGS}}"
+{% elif FUZZER == "icicle" %}
+command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i fuzzer/inputs/generic -o {{WORKDIR}} fuzzer/afl-icicle-trace bin/lava/{{BINARY}} {{ARGS}}"
+{% endif %}
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "copy_file"
+src = "{{WORKDIR}}/default/plot_data"
+dst = "{{TRIAL_DIR}}/plot_data"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "copy_file"
+src = "{{WORKDIR}}/fuzzer.stdout"
+dst = "{{TRIAL_DIR}}/fuzzer.stdout"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "copy_file"
+src = "{{WORKDIR}}/fuzzer.stderr"
+dst = "{{TRIAL_DIR}}/fuzzer.stderr"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "lava_verifier"
+command = "stdbuf -o0 -e0 fuzzer/sysroots/x86_64/bin/lava/{{BINARY}} {{ARGS}}"
+crash_dir = "{{WORKDIR}}/default/crashes"
+dst = "./output/lava/{BENCH_ID}/{{FUZZER}}_{{BINARY}}_{{MODE}}.lava_bugs.csv"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "save_tagged_afl_plot_data_v4"
+workdir = "{{WORKDIR}}"
+dst = "./output/lava/{BENCH_ID}/{{FUZZER}}_{{BINARY}}_{{MODE}}.plot_data.csv"
+
+[[tasks.'{{TASK_NAME}}'.tasks]]
+kind = "run_host"
+command = "../AFLplusplus/afl-plot {{TRIAL_DIR}} {{TRIAL_DIR}}"
+{% endwith %}
+{% endmacro %}
+
+
+{% set modes = ["cov", "cov+cmplog", "cov+compcov"] %}
+
+##
+## QEMU tasks
+##
+{% for mode in modes %}
+    {% for arch in ["x86_64", "aarch64"] %}
+        {% for binary, args in  [["base64", "-d @@"], ["md5sum", "-c @@"], ["uniq", "@@"], ["who", "@@"]] %}
+
+{{ lava_task(FUZZER="qemu", BINARY=binary, ARGS=args, ARCH=arch, MODE=mode) }}
+
+        {% endfor %}
+    {% endfor %}
+{% endfor %}
+
+##
+## ICICLE tasks
+##
+
+{% for mode in modes %}
+    {% for arch in ["x86_64", "aarch64", "mipsel", "riscv64"] %}
+        {% for binary, args in  [["base64", "-d /dev/stdin"], ["md5sum", "-c /dev/stdin"], ["uniq", "/dev/stdin"], ["who", "/dev/stdin"]] %}
+
+        {# Execution timeout is increase for the who binary since several large blocks cause slow
+           JIT compilation causing timeouts the first time they are executed #}
+        {% with timeout = ("10000+" if binary == "who" else "1000+") %}
+{{ lava_task(FUZZER="icicle", BINARY=binary, ARGS=args, ARCH=arch, MODE=mode, EXEC_TIMEOUT=timeout) }}
+        {% endwith %}
+
+        {% endfor %}
+    {% endfor %}
+{% endfor %}

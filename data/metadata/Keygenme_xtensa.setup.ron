@@ -1,0 +1,15 @@
+(
+    hooks: {
+        0x400e3120: Exit,
+        0x400e311e: Crash,
+    },
+    extra_memory: [
+        (offset: 0x20000000, size: 0x100000, perm: RW),
+    ],
+    initialize: [
+        (location: StartAddr, value: U32(0x400e30ab)),
+        (location: Reg("a2"), value: U32(0x20000000)),
+        (location: Reg("a3"), value: InputLength),
+        (location: Mem(0x20000000), value: InputData),
+    ]
+)

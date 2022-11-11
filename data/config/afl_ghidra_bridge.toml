@@ -1,0 +1,158 @@
+[images.afl_ghidra_bridge]
+kind = "host"
+paths = [
+  { dst = "inputs/generic", src = "../inputs" },
+
+  { dst = ".", src = "../AFLplusplus/afl-fuzz" },
+
+  { dst = ".", src = "../afl_ghidra_emu/afl_bridge_external/afl_bridge_external" },
+  { dst = ".", src = "../afl_ghidra_emu/libAFL" },
+
+  { dst = ".", src = "../afl_ghidra_emu/examples/ppc/fuzz_ppc_check_serial.py" },
+  { dst = ".", src = "../afl_ghidra_emu/examples/ppc/bin/keygenme_ppc.elf" },
+
+  { dst = ".", src = "../afl_ghidra_emu/examples/xtensa/fuzz_xtensa_check_serial.py" },
+  { dst = ".", src = "../afl_ghidra_emu/examples/xtensa/bin/keygenme_xtensa.elf" },
+
+  { dst = ".", src = "./data/metadata/Keygenme_ppc.setup.ron" },
+  { dst = ".", src = "./data/metadata/Keygenme_xtensa.setup.ron" },
+
+  { dst = ".", src = "../icicle/afl-icicle-trace/target/release/afl-icicle-trace" },
+
+  { dst = "ghidra/Ghidra/Processors/xtensa/data", src = "../ghidra/Ghidra/Processors/xtensa/data/languages" },
+  { dst = "ghidra/Ghidra/Processors/PowerPC/data", src = "../ghidra/Ghidra/Processors/PowerPC/data/languages" },
+]
+
+[instances.afl_ghidra_bridge]
+boot_delay_sec = 2
+machine = { smt = false, mem_size_mib = 2048, vcpu_count = 1 }
+rootfs = { name = "rootfs", image = "ghidra-rootfs", mount_as = "read_only" }
+drives = [
+  { name = "fuzzer", image = "afl_ghidra_bridge", mount_as = "read_only" },
+  { name = "var", image = "empty", mount_as = "duplicate" },
+]
+
+[templates.afl_ghidra_bridge]
+defaults = [
+  "DURATION='2h'",
+  "EXEC_TIMEOUT=1000+",
+  "INPUT_DIR=fuzzer/inputs/generic",
+]
+template = """
+{%
+    with (WORKDIR, OUTPUT_PATH, AFL_FUZZ_FLAGS, GHIDRA_SCRIPT) = (
+        "var/workdir_{TRIAL}",
+        "./output/keygen/{BENCH_ID}",
+        ("-c0 -l2" if MODE == "+cmplog"),
+        ("fuzz_xtensa_check_serial.py" if ARCH == "xtensa" else "fuzz_ppc_check_serial.py")
+    )
+%}
+instance = "afl_ghidra_bridge"
+vars = [
+    "TAG=v1;bench={BENCH_ID};fuzzer={{FUZZER}}{{MODE}};binary={{BINARY_NAME}};arch={{ARCH}};trial={TRIAL}",
+
+    "AFL_FORKSRV_INIT_TMOUT=1000000",
+    "AFL_NO_UI=1",
+
+{% if FUZZER == "icicle" %}
+    "AFL_QEMU_CUSTOM_BIN=1",
+    "ICICLE_ENABLE_JIT_VERIFIER=false",
+    "ICICLE_ARCH={{ARCH}}-none",
+{% endif %}
+]
+
+[[tasks]]
+kind = "run"
+command = "mkdir -p {{WORKDIR}}"
+
+{% if FUZZER == "ghidra" %}
+
+    [[tasks]]
+    kind = "run"
+    command = "ghidra/support/analyzeHeadless {{WORKDIR}} {{BINARY_NAME}} -scriptPath fuzzer -import fuzzer/{{BINARY_NAME}}"
+
+    [[tasks]]
+    kind = "spawn_task"
+    key = "check_serial"
+    command = "ghidra/support/analyzeHeadless {{WORKDIR}} {{BINARY_NAME}} -scriptPath fuzzer -process {{BINARY_NAME}} -noanalysis -postScript {{GHIDRA_SCRIPT}}"
+
+    [[tasks]]
+    kind = "sleep"
+    time_sec = 30
+
+    [[tasks]]
+    kind = "run"
+    duration = {{DURATION}}
+    command = "fuzzer/afl-fuzz -t {{EXEC_TIMEOUT}} -i {{INPUT_DIR}} -o {{WORKDIR}} fuzzer/afl_bridge_external 127.0.0.1 6674 20"
+
+{% elif FUZZER == "icicle" %}
+
+    [[tasks]]
+    kind = "run"
+    duration = {{DURATION}}
+    command = "ICICLE_CUSTOM_SETUP_PATH='{{SETUP_CONFIG}}' fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i {INPUT_DIR} -o {{WORKDIR}} fuzzer/afl-icicle-trace fuzzer/{{BINARY_NAME}}"
+
+{% endif %}
+
+[[tasks]]
+kind = "input_pattern_verifier"
+crash_dir = "{{WORKDIR}}/default/crashes"
+dst = "{{OUTPUT_PATH}}_results.csv"
+patterns = [
+    { key = "1", offset = 0, bytes = "AZERTYUI" },
+]
+
+[[tasks]]
+kind = "save_tagged_afl_plot_data_v4"
+workdir = "{{WORKDIR}}"
+dst = "{{OUTPUT_PATH}}_plot_data.csv"
+
+{% endwith %}
+"""
+
+[templated_tasks.'afl_ghidra_bridge-powerpc-keygen']
+template = "afl_ghidra_bridge"
+parameters = ["ARCH=powerpc", "FUZZER=ghidra", "BINARY_NAME=keygenme_ppc.elf"]
+
+[templated_tasks.'afl_ghidra_bridge-xtensa-keygen']
+template = "afl_ghidra_bridge"
+parameters = ["ARCH=xtensa", "FUZZER=ghidra", "BINARY_NAME=keygenme_xtensa.elf"]
+
+
+[templated_tasks.'icicle-powerpc-keygen']
+template = "afl_ghidra_bridge"
+parameters = [
+  "ARCH=powerpc",
+  "FUZZER=icicle",
+  "SETUP_CONFIG=fuzzer/Keygenme_ppc.setup.ron",
+  "BINARY_NAME=keygenme_ppc.elf",
+]
+
+[templated_tasks.'icicle-cmplog-powerpc-keygen']
+template = "afl_ghidra_bridge"
+parameters = [
+  "ARCH=powerpc",
+  "FUZZER=icicle",
+  "MODE=+cmplog",
+  "SETUP_CONFIG=fuzzer/Keygenme_ppc.setup.ron",
+  "BINARY_NAME=keygenme_ppc.elf",
+]
+
+[templated_tasks.'icicle-xtensa-keygen']
+template = "afl_ghidra_bridge"
+parameters = [
+  "ARCH=xtensa",
+  "FUZZER=icicle",
+  "SETUP_CONFIG=fuzzer/Keygenme_xtensa.setup.ron",
+  "BINARY_NAME=keygenme_xtensa.elf",
+]
+
+[templated_tasks.'icicle-cmplog-xtensa-keygen']
+template = "afl_ghidra_bridge"
+parameters = [
+  "ARCH=xtensa",
+  "FUZZER=icicle",
+  "MODE=+cmplog",
+  "SETUP_CONFIG=fuzzer/Keygenme_xtensa.setup.ron",
+  "BINARY_NAME=keygenme_xtensa.elf",
+]

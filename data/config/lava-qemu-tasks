@@ -1,0 +1,8 @@
+qemu-lava/x86_64/base64
+qemu-lava/x86_64/md5sum
+qemu-lava/x86_64/uniq
+qemu-lava/x86_64/who
+qemu-lava/aarch64/base64
+qemu-lava/aarch64/md5sum
+qemu-lava/aarch64/uniq
+qemu-lava/aarch64/who

@@ -1,0 +1,215 @@
+
+
+##
+## Config for instrumentation experiment the mostly the same as the lava-fuzz experiment but with a
+## different verifier.
+##
+
+[templates.instrumentation]
+defaults = [
+    "DURATION='10min'",
+    "ARCH=x86_64",
+    "EXEC_TIMEOUT=100+",
+    "INPUT_DIR=fuzzer/inputs/generic",
+    "MODE=cov+cmplog"
+]
+template = """
+{%
+    with (WORKDIR, TRIAL_DIR, AFL_FUZZ_FLAGS, QEMU_LD_PREFIX) = (
+        "var/workdir_{TRIAL}",
+        "./output/lava/{BENCH_ID}/{TASK_NAME}/{TRIAL}",
+        ("-c0 -l2" if MODE == "cov+cmplog"),
+        ("fuzzer/sysroots/" ~ ARCH)
+    )
+%}
+instance = "lava-fuzz"
+vars = [
+    "TAG=v1;bench={BENCH_ID};fuzzer={{FUZZER}};binary=instrumentation;mode={{MODE}};arch={{ARCH}};trial={TRIAL}",
+
+    "AFL_QEMU_CUSTOM_BIN=1",
+    "AFL_NO_UI=1",
+
+{% if MODE == "cov+compcov" %}
+    "AFL_COMPCOV_LEVEL=2",
+{% endif %}
+
+{% if MODE == "cov+context" %}
+    "ICICLE_CONTEXT_BITS=8",
+{% endif %}
+
+{% if FUZZER == "icicle" %}
+    "ICICLE_ENABLE_JIT_VERIFIER=false",
+{% endif %}
+
+{% if ARCH == "msp430" %}
+    "ICICLE_ARCH={{ARCH}}-none",
+    "MSP430_MCU=fuzzer/msp430-mcu/msp430f6638.ron",
+    "MSP430_FIXED_SEED=0x670d7c8767aa7116",     # The seed used for interrupt scheduling
+{% endif %}
+]
+
+[[tasks]]
+kind = "run"
+command = "mkdir -p {{WORKDIR}}"
+
+[[tasks]]
+kind = "run"
+duration = {{DURATION}}
+# stdout = "{{WORKDIR}}/fuzzer.stdout"
+# stderr = "{{WORKDIR}}/fuzzer.stderr"
+{% if FUZZER == "qemu" %}
+command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i {{INPUT_DIR}} -o {{WORKDIR}} fuzzer/afl-qemu-trace-{{ARCH}} -L {{QEMU_LD_PREFIX}} {{QEMU_LD_PREFIX}}/bin/instrumentation @@"
+{% elif FUZZER == "icicle" %}
+    {% if ARCH == "msp430" %}
+    command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i {{INPUT_DIR}} -o {{WORKDIR}} fuzzer/afl-icicle-trace fuzzer/sysroots/msp430/instrumentation"
+    {% else %}
+    command = "fuzzer/afl-fuzz -Q {{AFL_FUZZ_FLAGS}} -t {{EXEC_TIMEOUT}} -i {{INPUT_DIR}} -o {{WORKDIR}} fuzzer/afl-icicle-trace bin/instrumentation /dev/stdin"
+    {% endif %}
+{% endif %}
+
+[[tasks]]
+kind = "input_pattern_verifier"
+crash_dir = "{{WORKDIR}}/default/crashes"
+dst = "./output/instrumentation/{BENCH_ID}_results.csv"
+patterns = [
+    { key = "1", offset = 0, bytes = "%" },
+    { key = "2", offset = 0, bytes = "ixSD" },
+    { key = "3", offset = 0, bytes = "wzfc" },
+    { key = "4", offset = 0, bytes = "dGlIHF1W" },
+    { key = "5", offset = 0, bytes = "4dX2" },
+]
+
+{% endwith %}
+"""
+
+## ICICLE CmpLog
+
+[templated_tasks.'icicle-x86_64-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=icicle", "ARCH=x86_64"]
+
+[templated_tasks.'icicle-aarch64-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=icicle", "ARCH=aarch64"]
+
+[templated_tasks.'icicle-mipsel-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=icicle", "ARCH=mipsel"]
+
+[templated_tasks.'icicle-riscv64-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=icicle", "ARCH=riscv64"]
+
+[templated_tasks.'icicle-msp430-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=icicle", "ARCH=msp430"]
+
+## ICICLE CompareCov
+
+[templated_tasks.'icicle-x86_64-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=icicle", "ARCH=x86_64"]
+
+[templated_tasks.'icicle-aarch64-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=icicle", "ARCH=aarch64"]
+
+[templated_tasks.'icicle-mipsel-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=icicle", "ARCH=mipsel"]
+
+[templated_tasks.'icicle-riscv64-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=icicle", "ARCH=riscv64"]
+
+[templated_tasks.'icicle-msp430-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=icicle", "ARCH=msp430"]
+
+## ICICLE Context
+
+[templated_tasks.'icicle-x86_64-instrumentation_context']
+template = "instrumentation"
+parameters = ["MODE=cov+context", "FUZZER=icicle", "ARCH=x86_64"]
+
+[templated_tasks.'icicle-aarch64-instrumentation_context']
+template = "instrumentation"
+parameters = ["MODE=cov+context", "FUZZER=icicle", "ARCH=aarch64"]
+
+[templated_tasks.'icicle-mipsel-instrumentation_context']
+template = "instrumentation"
+parameters = ["MODE=cov+context", "FUZZER=icicle", "ARCH=mipsel"]
+
+[templated_tasks.'icicle-riscv64-instrumentation_context']
+template = "instrumentation"
+parameters = ["MODE=cov+context", "FUZZER=icicle", "ARCH=riscv64"]
+
+[templated_tasks.'icicle-msp430-instrumentation_context']
+template = "instrumentation"
+parameters = ["MODE=cov+context", "FUZZER=icicle", "ARCH=msp430"]
+
+
+
+## QEMU CmpLog
+
+[templated_tasks.'qemu-x86_64-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=qemu", "ARCH=x86_64"]
+
+[templated_tasks.'qemu-aarch64-instrumentation']
+template = "instrumentation"
+parameters = ["MODE=cov+cmplog", "FUZZER=qemu", "ARCH=aarch64"]
+
+## QEMU CompCov
+
+[templated_tasks.'qemu-x86_64-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=qemu", "ARCH=x86_64"]
+
+[templated_tasks.'qemu-aarch64-instrumentation_compcov']
+template = "instrumentation"
+parameters = ["MODE=cov+compcov", "FUZZER=qemu", "ARCH=aarch64"]
+
+
+
+## ICICLE coverage only
+
+[templated_tasks.'icicle-x86_64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=icicle", "ARCH=x86_64"]
+
+[templated_tasks.'icicle-aarch64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=icicle", "ARCH=aarch64"]
+
+[templated_tasks.'icicle-mipsel-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=icicle", "ARCH=mipsel"]
+
+[templated_tasks.'icicle-riscv64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=icicle", "ARCH=riscv64"]
+
+[templated_tasks.'icicle-msp430-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=icicle", "ARCH=msp430"]
+
+
+## QEMU coverage only
+
+[templated_tasks.'qemu-x86_64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=qemu", "ARCH=x86_64"]
+
+[templated_tasks.'qemu-aarch64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=qemu", "ARCH=aarch64"]
+
+[templated_tasks.'qemu-mipsel-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=qemu", "ARCH=mipsel"]
+
+[templated_tasks.'qemu-riscv64-instrumentation_cov_only']
+template = "instrumentation"
+parameters = ["MODE=cov", "FUZZER=qemu", "ARCH=riscv64"]
+
