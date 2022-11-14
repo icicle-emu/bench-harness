@@ -4,7 +4,7 @@
 
 (NOTE: a KVM enabled host is required to run the benchmarks).
 
-First follow the instructions in [README.md](../README.md).
+First follow the Quickstart guide in the root repository: [README.md](https://github.com/icicle-emu/icicle/blob/main/README.md).
 
 Next build the disk images needed to run the benchmarks. (Currently this requires root to allow the disk images to be temporarily mounted during creation).
 
